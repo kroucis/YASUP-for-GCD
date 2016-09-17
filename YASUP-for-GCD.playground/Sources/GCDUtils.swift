@@ -1,58 +1,9 @@
-//
-//  GCDUtils.swift
-//  GCDUtils
-//
-//  Created by Kyle Roucis on 15-7-6.
-//  Copyright © 2015 Kyle Roucis. All rights reserved.
-//
+//  YASUP for GCD v 1.1.0
+//  Copyright © Kyle Roucis 2015-2016
 
 import Foundation
 
-public func dispatchAsync(qualityOfService qos: qos_class_t = QOS_CLASS_DEFAULT, toBackground background: () -> Void, toMain mainBlockOrNil: (() -> Void)?)
-{
-    dispatchAsync(qualityOfService: qos) { () -> Void in
-        background()
-        if let mainBlock = mainBlockOrNil
-        {
-            dispatchAsyncMain(mainBlock)
-        }
-    }
-}
-
-public func dispatchAsync(qualityOfService qos: qos_class_t = QOS_CLASS_DEFAULT, toBackground background: () -> Void) -> Void
-{
-    dispatch_async(dispatch_get_global_queue(qos, 0)) { () -> Void in
-        background()
-    }
-}
-
-public func dispatchSync(qualityOfService qos: qos_class_t = QOS_CLASS_DEFAULT, toBackground background: () -> Void) -> Void
-{
-    dispatch_sync(dispatch_get_global_queue(qos, 0)) { () -> Void in
-        background()
-    }
-}
-
-
-public func dispatchAsyncMain(main: () -> Void) -> Void
-{
-    dispatch_async(dispatch_get_main_queue(), main)
-}
-
-public func dispatchSyncMain(main: () -> Void) -> Void
-{
-    dispatch_sync(dispatch_get_main_queue(), main)
-}
-
-public func wait(qualityOfService qos: qos_class_t = QOS_CLASS_DEFAULT, on execute: () -> Void, then: () -> Void)
-{
-    let group = dispatch_group_create()
-    let queue = dispatch_get_global_queue(qos, 0)
-    dispatch_group_async(group, queue, execute)
-    dispatch_group_notify(group, queue, then)
-}
-
-public func synchronized<T>(lock: AnyObject, block: () -> T) -> T
+func synchronized<T>(_ lock: AnyObject, block: () -> T) -> T
 {
     objc_sync_enter(lock)
     let retVal: T = block()
@@ -86,50 +37,56 @@ public func synchronized<T>(lock: AnyObject, block: () -> T) -> T
 //
 // MARK: - Sync Main
 //
-postfix operator -!>| { }
-public postfix func -!>|(main: () -> Void)
+postfix operator -!>|
+postfix func -!>|(main: () -> Void)
 {
-    dispatchSyncMain(main)
+    DispatchQueue.main.sync(execute: main)
 }
 
 //
 // MARK - Sync Background
 //
-postfix operator -!>/ { }
-public postfix func -!>/(background: () -> Void)
+postfix operator -!>/
+postfix func -!>/(background: () -> Void)
 {
-    dispatchSync(toBackground: background)
+    DispatchQueue.global().sync(execute: background)
 }
 
 //
 // MARK - Async Main
 //
-postfix operator -~>| { }
-public postfix func -~>|(main: () -> Void)
+postfix operator -~>|
+postfix func -~>|(main: @escaping () -> Void)
 {
-    dispatchAsyncMain(main)
+    DispatchQueue.main.async(execute: main)
 }
 
 //
 // MARK - Async Background
 //
-postfix operator -~>/ { }
-public postfix func -~>/(background: () -> Void)
+postfix operator -~>/
+postfix func -~>/(background: @escaping () -> Void)
 {
-    dispatchAsync(toBackground: background)
+    DispatchQueue.global().async(execute: background)
 }
 
 //
 // MARK - Async Background to Async Main
 //
-infix operator -~>/-~>| { }
-public func -~>/-~>|(background: () -> Void, main: () -> Void)
+infix operator -~>/-~>|
+func -~>/-~>|(background: @escaping () -> Void, main: @escaping () -> Void)
 {
-    dispatchAsync(toBackground: background, toMain: main)
+    {
+        background()
+        main-~>|
+        }-~>/
 }
 
-infix operator !! { }
-public func !!(first: () -> Void, second: () -> Void)
+infix operator !!
+func !!(first: @escaping () -> Void, second: @escaping () -> Void)
 {
-    wait(on: first, then: second)
+    let group = DispatchGroup()
+    let queue = DispatchQueue.global()
+    queue.async(group: group, execute: first)
+    group.notify(queue: queue, execute: second)
 }
